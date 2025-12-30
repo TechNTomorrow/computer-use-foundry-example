@@ -1,0 +1,124 @@
+import os
+from dotenv import load_dotenv
+from azure.identity import DefaultAzureCredential
+from azure.ai.projects import AIProjectClient
+from azure.ai.projects.models import AgentReference, PromptAgentDefinition, ComputerUsePreviewTool
+
+# Import shared helper functions
+from computer_use_util import (
+    SearchState,
+    load_screenshot_assets,
+    handle_computer_action_and_take_screenshot,
+    print_final_output,
+)
+
+load_dotenv()
+
+"""Main function to demonstrate Computer Use Agent functionality."""
+# Initialize state machine
+current_state = SearchState.INITIAL
+
+# Load screenshot assets as base64 data URLs
+try:
+    screenshots = load_screenshot_assets()
+    print("Successfully loaded screenshot assets")
+except FileNotFoundError:
+    print("Failed to load required screenshot assets. Please ensure the asset files exist in ../assets/")
+    exit(1)
+
+project_client = AIProjectClient(
+    endpoint=os.environ["PROJECT_ENDPOINT"],
+    credential=DefaultAzureCredential(),
+)
+
+computer_use_tool = ComputerUsePreviewTool(display_width=1026, display_height=769, environment="windows")
+
+with project_client:
+    agent = project_client.agents.create_version(
+        agent_name="ComputerUseAgent",
+        definition=PromptAgentDefinition(
+            model=os.environ["AZURE_AI_MODEL_DEPLOYMENT_NAME"],
+            instructions="""
+            You are a computer automation assistant. 
+
+            Be direct and efficient. When you reach the search results page, read and describe the actual search result titles and descriptions you can see.
+            """,
+            tools=[computer_use_tool],
+        ),
+        description="Computer automation agent with screen interaction capabilities.",
+    )
+    print(f"Agent created (id: {agent.id}, name: {agent.name}, version: {agent.version})")
+    openai_client = project_client.get_openai_client()
+
+    # Initial request with screenshot - start with Bing search page
+    print("Starting computer automation session (initial screenshot: cua_browser_search.png)...")
+    response = openai_client.responses.create(
+        input=[
+            {
+                "role": "user",
+                "content": [
+                    {
+                        "type": "input_text",
+                        "text": "I need you to help me search for 'OpenAI news'. Please type 'OpenAI news' and submit the search. Once you see search results, the task is complete.",
+                    },
+                    {
+                        "type": "input_image",
+                        "image_url": screenshots["browser_search"]["url"],
+                        "detail": "high",
+                    },  # Start with Bing search page
+                ],
+            }
+        ],
+        extra_body={"agent": AgentReference(name=agent.name).as_dict()},
+        truncation="auto",
+    )
+
+    print(f"Initial response received (ID: {response.id})")
+    max_iterations = 10  # Allow enough iterations for completion
+iteration = 0
+
+while True:
+        if iteration >= max_iterations:
+            print(f"\nReached maximum iterations ({max_iterations}). Stopping.")
+            break
+
+        iteration += 1
+        print(f"\n--- Iteration {iteration} ---")
+
+        # Check for computer calls in the response
+        computer_calls = [item for item in response.output if item.type == "computer_call"]
+
+        if not computer_calls:
+            print_final_output(response)
+            break
+
+        # Process the first computer call
+        computer_call = computer_calls[0]
+        action = computer_call.action
+        call_id = computer_call.call_id
+
+        print(f"Processing computer call (ID: {call_id})")
+
+        # Handle the action and get the screenshot info
+        screenshot_info, current_state = handle_computer_action_and_take_screenshot(action, current_state, screenshots)
+
+        print(f"Sending action result back to agent (using {screenshot_info['filename']})...")
+
+        # Regular response with just the screenshot
+        response = openai_client.responses.create(
+            previous_response_id=response.id,
+            input=[
+                {
+                    "call_id": call_id,
+                    "type": "computer_call_output",
+                    "output": {
+                        "type": "computer_screenshot",
+                        "image_url": screenshot_info["url"],
+                    },
+                }
+            ],
+            extra_body={"agent": AgentReference(name=agent.name).as_dict()},
+            truncation="auto",
+        )
+
+        print(f"Follow-up response received (ID: {response.id})")
