@@ -55,9 +55,9 @@ def load_screenshot_assets():
     # Load demo screenshot images from assets directory
     # Flow: search page -> typed search -> search results
     screenshot_paths = {
-        "browser_search": os.path.abspath(os.path.join(os.path.dirname(__file__), "./assets/cua_browser_search.png")),
-        "search_typed": os.path.abspath(os.path.join(os.path.dirname(__file__), "./assets/cua_search_typed.png")),
-        "search_results": os.path.abspath(os.path.join(os.path.dirname(__file__), "./assets/cua_search_results.png")),
+        "browser_search": os.path.abspath(os.path.join(os.path.dirname(__file__), "../../assets/cua_browser_search.png")),
+        "search_typed": os.path.abspath(os.path.join(os.path.dirname(__file__), "../../assets/cua_search_typed.png")),
+        "search_results": os.path.abspath(os.path.join(os.path.dirname(__file__), "../../assets/cua_search_results.png")),
     }
 
     # Convert images to base64 data URLs with filenames
