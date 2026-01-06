@@ -47,9 +47,11 @@ with (
         tool_choice="required",
         input="""
             Your goal is to find the latest news about Microsoft India and summarize the key points.
-            Use the Browser Automation tool to navigate to a news website, search for Microsoft India news,
-            and extract the relevant information. Provide a concise summary of the findings.
-            Use the website 'https://news.google.com' for your search.""",
+            To do that, go to the website https://news.google.com.
+            At the top of the page, you will find a search bar.
+            Enter the value Microsoft India into the search bar to get the latest news articles related to Microsoft India.,
+            Extract the relevant information. Provide a concise summary of the findings.
+            """,
         extra_body={"agent": {"name": agent.name, "type": "agent_reference"}},
     )
 
